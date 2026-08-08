@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 // Helper membaca Raw Binary Body dari Shaka Player
 const getRawBody = (req) => {
   return new Promise((resolve, reject) => {
@@ -11,7 +9,7 @@ const getRawBody = (req) => {
 };
 
 module.exports = async (req, res) => {
-  // 1. Handling Preflight CORS (OPTIONS)
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -34,7 +32,7 @@ module.exports = async (req, res) => {
       `&provisioningData=eyJwcm92aXNpb25pbmciOlt7InN5c3RlbSI6InZlcmltYXRyaXgiLCJkYXRhIjpbeyJuYW1lIjoidnVpZDIsInZhbHVlIjoiOTcyMjRjZDctOGI4Yy00YzM3LWEwOGUtMDIwZDQxNThjYTcwIn1dfV19` +
       `&url=${encodedTargetUrl}&userSessionToken=${token}`;
 
-    // STEP A: Ambil License URL dari Vision+
+    // STEP A: Ambil License URL dari Vision+ menggunakan Global/Native fetch
     const apiRes = await fetch(apiUrl, {
       method: "GET",
       headers: {
@@ -55,10 +53,10 @@ module.exports = async (req, res) => {
     const licenseUrl = data?.videos?.[0]?.licenses?.[0]?.url;
 
     if (!licenseUrl) {
-      return res.status(404).json({ error: "License URL Not Found" });
+      return res.status(404).json({ error: "License URL Not Found", detail: data });
     }
 
-    // JALUR GET: Untuk pengujian di Address Bar (Redirect 307)
+    // JALUR GET: Untuk tes di Address Bar Browser (Redirect 307)
     if (req.method === 'GET') {
       return res.redirect(307, licenseUrl);
     }
@@ -76,13 +74,15 @@ module.exports = async (req, res) => {
       body: rawBodyBuffer
     });
 
-    const licenseBuffer = await vmxResponse.buffer();
+    // Ambil arrayBuffer murni dari native fetch
+    const arrayBuffer = await vmxResponse.arrayBuffer();
+    const licenseBuffer = Buffer.from(arrayBuffer);
 
     res.status(vmxResponse.status);
     res.setHeader('Content-Type', vmxResponse.headers.get('content-type') || 'application/octet-stream');
     return res.send(licenseBuffer);
 
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message, stack: err.stack });
   }
 };
