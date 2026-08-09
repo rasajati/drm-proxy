@@ -19,25 +19,34 @@ module.exports = async (req, res) => {
     return res.end();
   }
 
-  // 2. Abaikan Request Favicon / Icon Browser agar tidak Crash
+  // 2. Abaikan Request Favicon Browser
   if (req.url.includes('favicon.ico') || req.url.includes('favicon.png')) {
-    res.statusCode = 204; // No Content
+    res.statusCode = 204;
     return res.end();
   }
 
   try {
     const query = req.query || {};
-    const id = query.id || '';
-    const server = query.server || '';
-    const dash = query.dash || '';
-    const hls = query.hls || '';
-
-    const id20 = id.padStart(20, '0');
     
-    // PERBAHARUI TOKEN INI JIKA TERJADI ERROR VISION+
+    // Ambil ID dari URL query
+    const id = query.id || '1';
+    const id20 = id.padStart(20, '0');
+
+    // Murni parameter custom (bisa NULL jika tidak dikirim)
+    const server = query.server ? `EG_${query.server}` : '';
+    const dash = query.dash ? `/DASH/${query.dash}` : '';
+    const hls = query.hls ? `/HLS/${query.hls}` : '';
+
+    // KETENTUAN UTAMA: Hanya Token yang Wajib Ada
     const token = query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNDA3MzcsInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.dwgIf-hDdMIwuQhGlM99jNm-2mXdb7Og2JgaQnim7JY";
 
-    const targetUrl = `multirights:mediapackage/live//EG_${server}/DASH/${dash}/HLS/${hls}/${id20}`;
+    // Menyusun Target URL tanpa memaksa nilai default (server, dash, hls opsional/NULL)
+    let targetUrl = `multirights:mediapackage/live/`;
+    if (server) targetUrl += `/${server}`;
+    if (dash) targetUrl += `${dash}`;
+    if (hls) targetUrl += `${hls}`;
+    targetUrl += `/${id20}`;
+
     const encodedTargetUrl = encodeURIComponent(targetUrl);
 
     const apiUrl = `https://www.visionplus.id/streamlocators/multirights/getPlayableUrlAndLicense` +
@@ -67,7 +76,7 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ 
         error: "Vision+ API Error", 
         status: apiRes.status,
-        message: "Token Vision+ kemungkinan expired/invalid." 
+        message: "Vision+ menolak permintaan. Pastikan token aktif/valid." 
       }));
     }
 
@@ -77,10 +86,14 @@ module.exports = async (req, res) => {
     if (!licenseUrl) {
       res.statusCode = 404;
       res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ error: "License URL Not Found", detail: data }));
+      return res.end(JSON.stringify({ 
+        error: "License URL Not Found", 
+        idRequested: id,
+        detail: data 
+      }));
     }
 
-    // JALUR GET: Untuk browser (Standard Redirect 307)
+    // JALUR GET: Untuk browser test (307 Redirect)
     if (req.method === 'GET') {
       res.writeHead(307, { Location: licenseUrl });
       return res.end();
