@@ -1,3 +1,7 @@
+const express = require('express');
+const fetch = require('node-fetch');
+const app = express();
+
 // Database Internal Channel Vision+
 // Format: ID: [server, dash]
 const CHANNEL_DB = {
@@ -123,7 +127,19 @@ const CHANNEL_DB = {
   "1014": ["d84q7nw4qf3j3", "c20d75deb06f401aa89681a9e5054de7"]
 };
 
-// Helper membaca Raw Binary Body dari Shaka Player / JWPlayer
+// CORS Header
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', '*');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Helper untuk membaca Stream Body Binary saat POST
 const getRawBody = (req) => {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -133,41 +149,19 @@ const getRawBody = (req) => {
   });
 };
 
-module.exports = async (req, res) => {
-  // 1. CORS Headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-
-  if (req.method === 'OPTIONS') {
-    res.statusCode = 200;
-    return res.end();
-  }
-
-  // 2. Abaikan Request Favicon Browser
-  if (req.url.includes('favicon.ico') || req.url.includes('favicon.png')) {
-    res.statusCode = 204;
-    return res.end();
-  }
-
+// Melayani Endpoint Root (/) dan juga (/license) agar fleksibel
+app.all(['/', '/license'], async (req, res) => {
   try {
-    const query = req.query || {};
-    const id = query.id || '1';
+    const id = req.query.id || '1';
     const id20 = id.padStart(20, '0');
 
-    // Cari data channel dari Database Internal
+    // Ambil data channel dari DB Internal
     const dbMatch = CHANNEL_DB[id] || ["d2xz2v5wuvgur6", "997ce8767b604fae9fce05379b3b8b3a"];
+    const server = req.query.server || dbMatch[0];
+    const dash = req.query.dash || dbMatch[1];
+    const hls = req.query.hls || '19361262a9cc45a6aae6c58420568734';
 
-    // Menggunakan query URL jika dimasukkan manual, jika tidak gunakan Database Internal
-    const server = (query.server && query.server !== 'true') ? query.server : dbMatch[0];
-    const dash = (query.dash && query.dash !== 'true') ? query.dash : dbMatch[1];
-    
-    // HLS diisi dummy hash karena kita menggunakan MPD/DASH
-    const hls = (query.hls && query.hls !== 'true') ? query.hls : '19361262a9cc45a6aae6c58420568734';
-
-    // 3. Ambil Token (Bisa dari Env Vercel, Query URL, atau Hardcode)
-    let rawToken = process.env.VISION_TOKEN || query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNTI5MTksInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.Ou32ahAzBg91YcaSm7FAR45QpoCHGl-aBKBIInF7fXw";
-    const token = decodeURIComponent(rawToken.trim()).replace(/ /g, '+');
+    const token = process.env.VISION_TOKEN || req.query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNDA3MzcsInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.dwgIf-hDdMIwuQhGlM99jNm-2mXdb7Og2JgaQnim7JY";
 
     const targetUrl = `multirights:mediapackage/live//EG_${server}/DASH/${dash}/HLS/${hls}/${id20}`;
     const encodedTargetUrl = encodeURIComponent(targetUrl);
@@ -177,6 +171,7 @@ module.exports = async (req, res) => {
       `&provisioningData=eyJwcm92aXNpb25pbmciOlt7InN5c3RlbSI6InZlcmltYXRyaXgiLCJkYXRhIjpbeyJuYW1lIjoidnVpZDIsInZhbHVlIjoiOTcyMjRjZDctOGI4Yy00YzM3LWEwOGUtMDIwZDQxNThjYTcwIn1dfV19` +
       `&url=${encodedTargetUrl}&userSessionToken=${token}`;
 
+    // Ambil URL Lisensi Verimatrix
     const apiRes = await fetch(apiUrl, {
       method: "GET",
       headers: {
@@ -193,39 +188,25 @@ module.exports = async (req, res) => {
       }
     });
 
-    if (!apiRes.ok) {
-      res.statusCode = apiRes.status;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ 
-        error: "Vision+ API Error", 
-        status: apiRes.status,
-        message: "Token Vision+ kadaluwarsa atau tidak valid." 
-      }));
-    }
-
     const data = await apiRes.json();
     const licenseUrl = data?.videos?.[0]?.licenses?.[0]?.url;
 
     if (!licenseUrl) {
-      res.statusCode = 404;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ 
-        error: "License URL Not Found", 
+      return res.status(404).json({ 
+        error: "License URL Not Found",
         idRequested: id,
-        targetUrlUsed: targetUrl,
         detail: data 
-      }));
+      });
     }
 
-    // JALUR GET: Untuk browser test (307 Redirect)
+    // JALUR 1: BROWSER TEST (HTTP GET)
     if (req.method === 'GET') {
-      res.writeHead(307, { Location: licenseUrl });
-      return res.end();
+      return res.redirect(307, licenseUrl);
     }
 
-    // JALUR POST: Untuk Player (Proxy DRM Binary)
+    // JALUR 2: PLAYER VIDEO (HTTP POST)
     const rawBodyBuffer = await getRawBody(req);
-
+    
     const vmxResponse = await fetch(licenseUrl, {
       method: 'POST',
       headers: {
@@ -236,16 +217,18 @@ module.exports = async (req, res) => {
       body: rawBodyBuffer
     });
 
+    // PENTING: Menggunakan arrayBuffer() agar kompatibel dengan Vercel Node Runtime
     const arrayBuffer = await vmxResponse.arrayBuffer();
     const licenseBuffer = Buffer.from(arrayBuffer);
 
-    res.statusCode = vmxResponse.status;
-    res.setHeader('Content-Type', vmxResponse.headers.get('content-type') || 'application/octet-stream');
-    return res.end(licenseBuffer);
+    res.status(vmxResponse.status);
+    res.set('Content-Type', vmxResponse.headers.get('content-type') || 'application/octet-stream');
+    return res.send(licenseBuffer);
 
   } catch (err) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: err.message }));
+    return res.status(500).json({ error: err.message });
   }
-};
+});
+
+// EXPORT UNTUK VERCEL SERVERLESS
+module.exports = app;
