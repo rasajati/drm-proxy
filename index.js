@@ -135,16 +135,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// MEMBACA RAW BINARY BODY SAMA SEPERTI PHP file_get_contents('php://input')
+// Helper baca Buffer Body
 const getRawBody = (req) => {
   return new Promise((resolve, reject) => {
-    let chunks = [];
+    const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', (err) => reject(err));
   });
 };
 
+// Route fleksibel untuk '/' dan '/license'
 app.all(['/', '/license'], async (req, res) => {
   try {
     const id = req.query.id || '1';
@@ -165,7 +166,6 @@ app.all(['/', '/license'], async (req, res) => {
       `&provisioningData=eyJwcm92aXNpb25pbmciOlt7InN5c3RlbSI6InZlcmltYXRyaXgiLCJkYXRhIjpbeyJuYW1lIjoidnVpZDIsInZhbHVlIjoiOTcyMjRjZDctOGI4Yy00YzM3LWEwOGUtMDIwZDQxNThjYTcwIn1dfV19` +
       `&url=${encodedTargetUrl}&userSessionToken=${token}`;
 
-    // 1. Get License URL dari Vision+
     const apiRes = await fetch(apiUrl, {
       method: "GET",
       headers: {
@@ -189,20 +189,20 @@ app.all(['/', '/license'], async (req, res) => {
       return res.status(404).json({ error: "License URL Not Found", idRequested: id });
     }
 
-    // Jika Request GET dari browser
+    // Jika GET (Pengujian Manual Browser)
     if (req.method === 'GET') {
       return res.redirect(307, licenseUrl);
     }
 
-    // Jika Request POST dari Video Player (Widevine Challenge)
+    // Jika POST (Player Kirim DRM Challenge)
     const rawBodyBuffer = await getRawBody(req);
     
     const vmxResponse = await fetch(licenseUrl, {
       method: 'POST',
       headers: {
         'Accept': '*/*',
-        'Content-Type': 'application/octet-stream',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'Content-Type': req.headers['content-type'] || 'application/octet-stream',
+        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       },
       body: rawBodyBuffer
     });
@@ -210,11 +210,9 @@ app.all(['/', '/license'], async (req, res) => {
     const arrayBuffer = await vmxResponse.arrayBuffer();
     const licenseBuffer = Buffer.from(arrayBuffer);
 
-    // KUNCI: Set Header persis seperti behavior PHP
     res.status(vmxResponse.status);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Length', licenseBuffer.length);
-    return res.end(licenseBuffer); // Gunakan res.end() agar binary tidak di-alter Express
+    res.set('Content-Type', vmxResponse.headers.get('content-type') || 'application/octet-stream');
+    return res.send(licenseBuffer);
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
