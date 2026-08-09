@@ -1,3 +1,4 @@
+export const revalidate = 0; // Memberitahu Vercel untuk TIDAK MEMAKAI CACHE sama sekali
 const { URL } = require('url');
 
 // Helper membaca Raw Binary Body dari Shaka Player
