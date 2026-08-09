@@ -1,12 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/",
-      "destination": "/api/license"
-    },
-    {
-      "source": "/license",
-      "destination": "/api/license"
+      "source": "/(.*)",
+      "destination": "/index.js"
     }
   ],
   "headers": [
