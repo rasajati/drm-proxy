@@ -30,15 +30,14 @@ module.exports = async (req, res) => {
     const id = query.id || '1';
     const id20 = id.padStart(20, '0');
 
-    // Mencegah error path dengan fallback struktur standar Vision+
-    const server = query.server || 'd2xz2v5wuvgur6';
-    const dash = query.dash || '997ce8767b604fae9fce05379b3b8b3a';
-    const hls = query.hls || '19361262a9cc45a6aae6c58420568734';
+    // MENCEGAH PARAMETER KOSONG:
+    // Jika query dikirim kosong (&hls atau &dash tanpa nilai), sistem otomatis pakai fallback
+    const server = (query.server && query.server !== 'true') ? query.server : 'd2xz2v5wuvgur6';
+    const dash = (query.dash && query.dash !== 'true') ? query.dash : 'd6b026ad50f14b7f9af5ddd5450007d4';
+    const hls = (query.hls && query.hls !== 'true') ? query.hls : '19361262a9cc45a6aae6c58420568734';
 
-    // 3. Ambil Token (Bisa dari Env Vercel, Query URL, atau Hardcode)
+    // Ambil Token dari Env Vercel, Query URL, atau Hardcode
     let rawToken = process.env.VISION_TOKEN || query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNTI5MTksInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.Ou32ahAzBg91YcaSm7FAR45QpoCHGl-aBKBIInF7fXw";
-
-    // Bersihkan token dari spasi yang sering terjadi akibat pembacaan URL
     const token = decodeURIComponent(rawToken.trim()).replace(/ /g, '+');
 
     const targetUrl = `multirights:mediapackage/live//EG_${server}/DASH/${dash}/HLS/${hls}/${id20}`;
@@ -71,7 +70,7 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ 
         error: "Vision+ API Error", 
         status: apiRes.status,
-        message: "Token Vision+ tidak valid atau kedaluwarsa. Silakan periksa kembali token Anda." 
+        message: "Token Vision+ kadaluwarsa atau tidak valid." 
       }));
     }
 
@@ -84,11 +83,12 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ 
         error: "License URL Not Found", 
         idRequested: id,
+        targetUrlUsed: targetUrl,
         detail: data 
       }));
     }
 
-    // JALUR GET: Untuk pengetesan di browser (307 Redirect)
+    // JALUR GET: Untuk browser test (307 Redirect)
     if (req.method === 'GET') {
       res.writeHead(307, { Location: licenseUrl });
       return res.end();
