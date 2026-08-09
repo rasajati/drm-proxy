@@ -1,4 +1,4 @@
-// Helper membaca Raw Binary Body dari Shaka Player
+// Helper membaca Raw Binary Body dari Shaka Player / JWPlayer
 const getRawBody = (req) => {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -27,26 +27,21 @@ module.exports = async (req, res) => {
 
   try {
     const query = req.query || {};
-    
-    // Ambil ID dari URL query
     const id = query.id || '1';
     const id20 = id.padStart(20, '0');
 
-    // Murni parameter custom (bisa NULL jika tidak dikirim)
-    const server = query.server ? `EG_${query.server}` : '';
-    const dash = query.dash ? `/DASH/${query.dash}` : '';
-    const hls = query.hls ? `/HLS/${query.hls}` : '';
+    // Mencegah error path dengan fallback struktur standar Vision+
+    const server = query.server || 'd2xz2v5wuvgur6';
+    const dash = query.dash || '997ce8767b604fae9fce05379b3b8b3a';
+    const hls = query.hls || '19361262a9cc45a6aae6c58420568734';
 
-    // KETENTUAN UTAMA: Hanya Token yang Wajib Ada
-    const token = process.env.VISION_TOKEN || query.token;
+    // 3. Ambil Token (Bisa dari Env Vercel, Query URL, atau Hardcode)
+    let rawToken = process.env.VISION_TOKEN || query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNTI5MTksInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.Ou32ahAzBg91YcaSm7FAR45QpoCHGl-aBKBIInF7fXw";
 
-    // Menyusun Target URL tanpa memaksa nilai default (server, dash, hls opsional/NULL)
-    let targetUrl = `multirights:mediapackage/live/`;
-    if (server) targetUrl += `/${server}`;
-    if (dash) targetUrl += `${dash}`;
-    if (hls) targetUrl += `${hls}`;
-    targetUrl += `/${id20}`;
+    // Bersihkan token dari spasi yang sering terjadi akibat pembacaan URL
+    const token = decodeURIComponent(rawToken.trim()).replace(/ /g, '+');
 
+    const targetUrl = `multirights:mediapackage/live//EG_${server}/DASH/${dash}/HLS/${hls}/${id20}`;
     const encodedTargetUrl = encodeURIComponent(targetUrl);
 
     const apiUrl = `https://www.visionplus.id/streamlocators/multirights/getPlayableUrlAndLicense` +
@@ -76,7 +71,7 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ 
         error: "Vision+ API Error", 
         status: apiRes.status,
-        message: "Vision+ menolak permintaan. Pastikan token aktif/valid." 
+        message: "Token Vision+ tidak valid atau kedaluwarsa. Silakan periksa kembali token Anda." 
       }));
     }
 
@@ -93,7 +88,7 @@ module.exports = async (req, res) => {
       }));
     }
 
-    // JALUR GET: Untuk browser test (307 Redirect)
+    // JALUR GET: Untuk pengetesan di browser (307 Redirect)
     if (req.method === 'GET') {
       res.writeHead(307, { Location: licenseUrl });
       return res.end();
