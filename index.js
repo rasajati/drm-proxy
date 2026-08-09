@@ -38,7 +38,7 @@ module.exports = async (req, res) => {
     const hls = query.hls ? `/HLS/${query.hls}` : '';
 
     // KETENTUAN UTAMA: Hanya Token yang Wajib Ada
-    const token = query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNDA3MzcsInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.dwgIf-hDdMIwuQhGlM99jNm-2mXdb7Og2JgaQnim7JY";
+    const token = process.env.VISION_TOKEN || query.token;
 
     // Menyusun Target URL tanpa memaksa nilai default (server, dash, hls opsional/NULL)
     let targetUrl = `multirights:mediapackage/live/`;
