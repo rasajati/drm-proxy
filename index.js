@@ -27,10 +27,10 @@ module.exports = async (req, res) => {
 
   try {
     const query = req.query || {};
-    const id = query.id || '1';
-    const server = query.server || 'd2xz2v5wuvgur6';
-    const dash = query.dash || '997ce8767b604fae9fce05379b3b8b3a';
-    const hls = query.hls || '19361262a9cc45a6aae6c58420568734';
+    const id = query.id || '';
+    const server = query.server || '';
+    const dash = query.dash || '';
+    const hls = query.hls || '';
 
     const id20 = id.padStart(20, '0');
     
