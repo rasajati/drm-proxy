@@ -1,41 +1,33 @@
-// Helper membaca Raw Binary Body dari Shaka Player
-const getRawBody = (req) => {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', (err) => reject(err));
-  });
-};
+const express = require('express');
+const app = express();
 
-module.exports = async (req, res) => {
-  // 1. CORS Headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
+app.use(express.raw({ type: '*/*', limit: '2mb' }));
 
-  if (req.method === 'OPTIONS') {
-    res.statusCode = 200;
-    return res.end();
-  }
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', '*');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 
-  // 2. Abaikan Request Favicon / Icon Browser agar tidak Crash
-  if (req.url.includes('favicon.ico') || req.url.includes('favicon.png')) {
-    res.statusCode = 204; // No Content
-    return res.end();
-  }
-
+app.all(['/', '/license'], async (req, res) => {
   try {
-    const query = req.query || {};
-    const id = query.id || '3';
-    const server = query.server || 'd2xz2v5wuvgur6';
-    const dash = query.dash || '997ce8767b604fae9fce05379b3b8b3a';
-    const hls = query.hls || '19361262a9cc45a6aae6c58420568734';
+    // --- PERBAIKAN UTAMA DI SINI ---
+    // Paksa ambil parameter dari req.url langsung agar Vercel tidak melewatkan query string
+    const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const queryParams = urlObj.searchParams;
+
+    // Ambil parameter dari URL (Address Bar)
+    const id = queryParams.get('id') || req.query.id || '1';
+    const server = queryParams.get('server') || req.query.server || 'd2xz2v5wuvgur6';
+    const dash = queryParams.get('dash') || req.query.dash || '997ce8767b604fae9fce05379b3b8b3a';
+    const hls = queryParams.get('hls') || req.query.hls || '19361262a9cc45a6aae6c58420568734';
+    const tokenQuery = queryParams.get('token') || req.query.token;
 
     const id20 = id.padStart(20, '0');
-    
-    // PERBAHARUI TOKEN INI JIKA TERJADI ERROR VISION+
-    const token = query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNTI5MTksInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.Ou32ahAzBg91YcaSm7FAR45QpoCHGl-aBKBIInF7fXw";
+
+    const token = process.env.VISION_TOKEN || tokenQuery || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNDA3MzcsInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.dwgIf-hDdMIwuQhGlM99jNm-2mXdb7Og2JgaQnim7JY";
 
     const targetUrl = `multirights:mediapackage/live//EG_${server}/DASH/${dash}/HLS/${hls}/${id20}`;
     const encodedTargetUrl = encodeURIComponent(targetUrl);
@@ -61,33 +53,18 @@ module.exports = async (req, res) => {
       }
     });
 
-    if (!apiRes.ok) {
-      res.statusCode = apiRes.status;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ 
-        error: "Vision+ API Error", 
-        status: apiRes.status,
-        message: "Token Vision+ kemungkinan expired/invalid." 
-      }));
-    }
-
     const data = await apiRes.json();
     const licenseUrl = data?.videos?.[0]?.licenses?.[0]?.url;
 
     if (!licenseUrl) {
-      res.statusCode = 404;
-      res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ error: "License URL Not Found", detail: data }));
+      return res.status(404).json({ error: "License URL Not Found", idRequested: id });
     }
 
-    // JALUR GET: Untuk browser (Standard Redirect 307)
     if (req.method === 'GET') {
-      res.writeHead(307, { Location: licenseUrl });
-      return res.end();
+      return res.redirect(307, licenseUrl);
     }
 
-    // JALUR POST: Untuk Player (Proxy DRM Binary)
-    const rawBodyBuffer = await getRawBody(req);
+    const rawBodyBuffer = req.body && Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
 
     const vmxResponse = await fetch(licenseUrl, {
       method: 'POST',
@@ -102,13 +79,14 @@ module.exports = async (req, res) => {
     const arrayBuffer = await vmxResponse.arrayBuffer();
     const licenseBuffer = Buffer.from(arrayBuffer);
 
-    res.statusCode = vmxResponse.status;
-    res.setHeader('Content-Type', vmxResponse.headers.get('content-type') || 'application/octet-stream');
-    return res.end(licenseBuffer);
+    res.status(vmxResponse.status);
+    res.set('Content-Type', vmxResponse.headers.get('content-type') || 'application/octet-stream');
+    return res.send(licenseBuffer);
 
   } catch (err) {
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: err.message }));
+    console.error("Function Error:", err);
+    return res.status(500).json({ error: "Internal Server Error", message: err.message });
   }
-};
+});
+
+module.exports = app;
