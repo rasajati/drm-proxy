@@ -9,13 +9,19 @@ const getRawBody = (req) => {
 };
 
 module.exports = async (req, res) => {
-  // CORS Headers
+  // 1. CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 200;
+    return res.end();
+  }
+
+  // 2. Abaikan Request Favicon / Icon Browser agar tidak Crash
+  if (req.url.includes('favicon.ico') || req.url.includes('favicon.png')) {
+    res.statusCode = 204; // No Content
     return res.end();
   }
 
@@ -28,7 +34,7 @@ module.exports = async (req, res) => {
 
     const id20 = id.padStart(20, '0');
     
-    // MASUKKAN TOKEN VISION+ TERBARU DI SINI BILA EXPIRATION HABIS
+    // PERBAHARUI TOKEN INI JIKA TERJADI ERROR VISION+
     const token = query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNDA3MzcsInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.dwgIf-hDdMIwuQhGlM99jNm-2mXdb7Og2JgaQnim7JY";
 
     const targetUrl = `multirights:mediapackage/live//EG_${server}/DASH/${dash}/HLS/${hls}/${id20}`;
@@ -61,7 +67,7 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ 
         error: "Vision+ API Error", 
         status: apiRes.status,
-        message: "Token Vision+ kemungkinan sudah expired. Harap perbarui token." 
+        message: "Token Vision+ kemungkinan expired/invalid." 
       }));
     }
 
@@ -74,7 +80,7 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ error: "License URL Not Found", detail: data }));
     }
 
-    // JALUR GET: Untuk browser (Standard Node.js HTTP 307 Redirect)
+    // JALUR GET: Untuk browser (Standard Redirect 307)
     if (req.method === 'GET') {
       res.writeHead(307, { Location: licenseUrl });
       return res.end();
