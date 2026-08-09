@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
     const queryParams = parsedUrl.searchParams;
 
     // Ambil input dari query parameter address bar
-    const id = queryParams.get('id') || (req.query && req.query.id) || '3';
+    const id = queryParams.get('id') || (req.query && req.query.id) || '2';
     const server = queryParams.get('server') || (req.query && req.query.server) || 'd2xz2v5wuvgur6';
     const dash = queryParams.get('dash') || (req.query && req.query.dash) || '997ce8767b604fae9fce05379b3b8b3a';
     const hls = queryParams.get('hls') || (req.query && req.query.hls) || '19361262a9cc45a6aae6c58420568734';
