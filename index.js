@@ -43,7 +43,7 @@ module.exports = async (req, res) => {
     const id20 = String(id).padStart(20, '0');
     
     // PERBAHARUI TOKEN INI JIKA TERJADI ERROR VISION+
-    const token = process.env.VISION_TOKEN || tokenQuery || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNTI5MTksInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.Ou32ahAzBg91YcaSm7FAR45QpoCHGl-aBKBIInF7fXw";
+    const token = process.env.VISION_TOKEN || tokenQuery;
 
     const targetUrl = `multirights:mediapackage/live//EG_${server}/DASH/${dash}/HLS/${hls}/${id20}`;
     const encodedTargetUrl = encodeURIComponent(targetUrl);
