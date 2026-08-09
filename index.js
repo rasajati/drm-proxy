@@ -9,17 +9,22 @@ const getRawBody = (req) => {
 };
 
 module.exports = async (req, res) => {
-  // CORS Headers
+  // 1. CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.statusCode = 200;
+    return res.end();
   }
 
   try {
-    const { id = '1', server = 'd2xz2v5wuvgur6', dash = '997ce8767b604fae9fce05379b3b8b3a', hls = '19361262a9cc45a6aae6c58420568734' } = req.query || {};
+    const query = req.query || {};
+    const id = query.id || '1';
+    const server = query.server || 'd2xz2v5wuvgur6';
+    const dash = query.dash || '997ce8767b604fae9fce05379b3b8b3a';
+    const hls = query.hls || '19361262a9cc45a6aae6c58420568734';
 
     const id20 = id.padStart(20, '0');
     const token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNDA3MzcsInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.dwgIf-hDdMIwuQhGlM99jNm-2mXdb7Og2JgaQnim7JY";
@@ -32,7 +37,7 @@ module.exports = async (req, res) => {
       `&provisioningData=eyJwcm92aXNpb25pbmciOlt7InN5c3RlbSI6InZlcmltYXRyaXgiLCJkYXRhIjpbeyJuYW1lIjoidnVpZDIsInZhbHVlIjoiOTcyMjRjZDctOGI4Yy00YzM3LWEwOGUtMDIwZDQxNThjYTcwIn1dfV19` +
       `&url=${encodedTargetUrl}&userSessionToken=${token}`;
 
-    // Gunakan Native fetch bawaan Node.js Vercel
+    // Native fetch Node.js Vercel
     const apiRes = await fetch(apiUrl, {
       method: "GET",
       headers: {
@@ -53,15 +58,18 @@ module.exports = async (req, res) => {
     const licenseUrl = data?.videos?.[0]?.licenses?.[0]?.url;
 
     if (!licenseUrl) {
-      return res.status(404).json({ error: "License URL Not Found", detail: data });
+      res.statusCode = 404;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ error: "License URL Not Found", detail: data }));
     }
 
-    // JALUR GET: Untuk browser (Redirect 307)
+    // JALUR GET: Untuk browser (Standard Node.js HTTP 307 Redirect)
     if (req.method === 'GET') {
-      return res.redirect(307, licenseUrl);
+      res.writeHead(307, { Location: licenseUrl });
+      return res.end();
     }
 
-    // JALUR POST: Untuk Player (Proxy Binary)
+    // JALUR POST: Untuk Player (Proxy DRM Binary)
     const rawBodyBuffer = await getRawBody(req);
 
     const vmxResponse = await fetch(licenseUrl, {
@@ -77,11 +85,13 @@ module.exports = async (req, res) => {
     const arrayBuffer = await vmxResponse.arrayBuffer();
     const licenseBuffer = Buffer.from(arrayBuffer);
 
-    res.status(vmxResponse.status);
+    res.statusCode = vmxResponse.status;
     res.setHeader('Content-Type', vmxResponse.headers.get('content-type') || 'application/octet-stream');
-    return res.send(licenseBuffer);
+    return res.end(licenseBuffer);
 
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ error: err.message, stack: err.stack }));
   }
 };
