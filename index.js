@@ -9,7 +9,7 @@ const getRawBody = (req) => {
 };
 
 module.exports = async (req, res) => {
-  // 1. CORS Headers
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
@@ -27,7 +27,9 @@ module.exports = async (req, res) => {
     const hls = query.hls || '19361262a9cc45a6aae6c58420568734';
 
     const id20 = id.padStart(20, '0');
-    const token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNDA3MzcsInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.dwgIf-hDdMIwuQhGlM99jNm-2mXdb7Og2JgaQnim7JY";
+    
+    // MASUKKAN TOKEN VISION+ TERBARU DI SINI BILA EXPIRATION HABIS
+    const token = query.token || "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOjQ0ODIyNjc4LCJ0eSI6IlVTRVIiLCJwY2kiOiI0NDYwNTE3NyIsImh3SWQiOiI5NzIyNGNkNy04YjhjLTRjMzctYTA4ZS0wMjBkNDE1OGNhNzAiLCJleHAiOjE3ODYyNDA3MzcsInBuIjoiTU5DIiwiY2lkIjoyMTM0MzUzNzR9.dwgIf-hDdMIwuQhGlM99jNm-2mXdb7Og2JgaQnim7JY";
 
     const targetUrl = `multirights:mediapackage/live//EG_${server}/DASH/${dash}/HLS/${hls}/${id20}`;
     const encodedTargetUrl = encodeURIComponent(targetUrl);
@@ -37,7 +39,6 @@ module.exports = async (req, res) => {
       `&provisioningData=eyJwcm92aXNpb25pbmciOlt7InN5c3RlbSI6InZlcmltYXRyaXgiLCJkYXRhIjpbeyJuYW1lIjoidnVpZDIsInZhbHVlIjoiOTcyMjRjZDctOGI4Yy00YzM3LWEwOGUtMDIwZDQxNThjYTcwIn1dfV19` +
       `&url=${encodedTargetUrl}&userSessionToken=${token}`;
 
-    // Native fetch Node.js Vercel
     const apiRes = await fetch(apiUrl, {
       method: "GET",
       headers: {
@@ -53,6 +54,16 @@ module.exports = async (req, res) => {
         "iris-profile-id": "27856765"
       }
     });
+
+    if (!apiRes.ok) {
+      res.statusCode = apiRes.status;
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ 
+        error: "Vision+ API Error", 
+        status: apiRes.status,
+        message: "Token Vision+ kemungkinan sudah expired. Harap perbarui token." 
+      }));
+    }
 
     const data = await apiRes.json();
     const licenseUrl = data?.videos?.[0]?.licenses?.[0]?.url;
@@ -92,6 +103,6 @@ module.exports = async (req, res) => {
   } catch (err) {
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: err.message, stack: err.stack }));
+    return res.end(JSON.stringify({ error: err.message }));
   }
 };
